@@ -11,3 +11,6 @@ wheels/
 .configs.toml
 *.log
 *.txt
+*.xlsx
+*.csv
+*.json
