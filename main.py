@@ -84,6 +84,119 @@ class CandidateAgent(RoleAgent):
         super().__init__(role_config=role_info)
 
 
+class RealDataCandidateAgent:
+    """基于真实简历数据的候选人Agent"""
+
+    def __init__(self, candidate_data):
+        """
+        初始化真实数据候选人Agent
+
+        Args:
+            candidate_data: 包含简历、JD、岗位信息等的字典
+        """
+        self.candidate_data = candidate_data
+        self.resume = candidate_data.get("resume", "")
+        self.jd = candidate_data.get("jd", "")
+        self.position = candidate_data.get("position", "")
+        self.intelligence_requirement = candidate_data.get(
+            "intelligence_requirement", 0
+        )
+        self.model = Model()
+
+        # 构建候选人人设提示
+        self.persona_prompt = self._build_persona_prompt()
+
+    def _build_persona_prompt(self):
+        """构建候选人人设提示"""
+        return f"""
+你是一位求职者，正在参加{self.position}岗位的面试。
+
+你的简历背景：
+{self.resume}
+
+应聘的岗位要求：
+{self.jd}
+
+岗位对聪明度的要求：{self.intelligence_requirement}/10
+
+请根据你的简历背景，以第一人称回答面试官的问题。要求：
+1. 回答要符合简历中的经历和背景
+2. 体现出适合该岗位的能力和特质
+3. 回答要真实可信，不要夸大
+4. 语气要自然、诚恳，体现求职者的谨慎和积极
+5. 如果问题涉及简历中没有的经历，要诚实说明并展示学习意愿
+6. 回答长度适中，既要详细又不要过于冗长
+
+现在请准备回答面试官的问题。
+"""
+
+    def answer_question(self, question):
+        """
+        根据简历背景回答面试问题
+
+        Args:
+            question: 面试官的问题
+
+        Returns:
+            str: 候选人的回答
+        """
+        try:
+            # 构建完整的对话提示
+            full_prompt = f"""
+{self.persona_prompt}
+
+面试官问：{question}
+
+请以候选人身份回答这个问题：
+"""
+
+            response = self.model.chat([user(content=full_prompt)])
+            answer = response.text  # self._extract_response_text(response)
+
+            # 清理格式，确保回答自然
+            answer = self._clean_answer(answer)
+
+            return answer
+
+        except Exception as e:
+            return f"抱歉，我需要一点时间思考这个问题。能否请您再详细说明一下？"
+
+    def _extract_response_text(self, response):
+        """提取响应文本"""
+        if hasattr(response, "content"):
+            return response.content
+        elif isinstance(response, dict) and "content" in response:
+            return response["content"]
+        elif isinstance(response, str):
+            return response
+        else:
+            return str(response)
+
+    def _clean_answer(self, answer):
+        """清理回答格式"""
+        # 移除可能的角色标识
+        if answer.startswith(("候选人：", "求职者：", "我：")):
+            answer = answer.split("：", 1)[1].strip()
+        elif answer.startswith(("候选人:", "求职者:", "我:")):
+            answer = answer.split(":", 1)[1].strip()
+
+        # 移除多余的引号
+        answer = answer.strip("\"'")
+
+        return answer.strip()
+
+    def get_candidate_info_summary(self):
+        """获取候选人信息摘要"""
+        return {
+            "position": self.position,
+            "intelligence_requirement": self.intelligence_requirement,
+            "resume_preview": (
+                self.resume[:200] + "..." if len(self.resume) > 200 else self.resume
+            ),
+            "jd_preview": self.jd[:200] + "..." if len(self.jd) > 200 else self.jd,
+        }
+
+
 class HRAgent(RoleAgent):
     def __init__(self, role_info):
         super().__init__(role_config=role_info)
@@ -410,6 +523,33 @@ def real_data_interview_simulation():
             print_message("面试准备完成，可随时开始")
             return
 
+        # 选择面试模式
+        print_message("\n🎭 请选择面试模式:")
+        print_message("1. 手动模式 - 您亲自回答面试问题")
+        print_message("2. Agent模式 - AI候选人根据简历数据自动回答")
+
+        mode_choice = input("请选择模式 (1-2): ").strip()
+
+        if mode_choice == "2":
+            # Agent模式：创建基于真实数据的候选人Agent
+            print_message("\n🤖 正在创建AI候选人...")
+            candidate_agent = RealDataCandidateAgent(candidate_data)
+            agent_mode = True
+
+            # 显示AI候选人信息摘要
+            info_summary = candidate_agent.get_candidate_info_summary()
+            print_message("✅ AI候选人已就绪，基于以下简历背景:")
+            print_message(f"   岗位: {info_summary['position']}")
+            print_message(
+                f"   聪明度要求: {info_summary['intelligence_requirement']}/10"
+            )
+            print_message(f"   简历预览: {info_summary['resume_preview']}")
+            print_message("\n🎭 AI候选人将根据简历背景智能回答面试问题")
+        else:
+            # 手动模式（默认）
+            agent_mode = False
+            print_message("✅ 手动模式已启用，您将亲自回答面试问题")
+
         # 开始交互式面试
         print_message("\n" + "=" * 60)
         print_message("🎤 面试开始!")
@@ -475,17 +615,24 @@ def real_data_interview_simulation():
             print_message(f"[HR助手]: {hr_question}")
             conversation_history.append({"role": "HR", "content": hr_question})
 
-            # 候选人回答 (用户输入)
-            print_message("\n[您的回答]:")
-            candidate_answer = input(">> ").strip()
+            # 候选人回答 - 根据模式选择
+            if agent_mode:
+                # Agent模式：AI候选人自动回答
+                print_message("\n[AI候选人思考中...]")
+                candidate_answer = candidate_agent.answer_question(hr_question)
+                print_message(f"[AI候选人]: {candidate_answer}")
+            else:
+                # 手动模式：用户输入回答
+                print_message("\n[您的回答]:")
+                candidate_answer = input(">> ").strip()
 
-            if candidate_answer.lower() == "quit":
-                print_message("面试结束，感谢您的参与！")
-                break
+                if candidate_answer.lower() == "quit":
+                    print_message("面试结束，感谢您的参与！")
+                    break
 
-            if not candidate_answer:
-                print_message("⚠️ 请输入您的回答")
-                continue
+                if not candidate_answer:
+                    print_message("⚠️ 请输入您的回答")
+                    continue
 
             conversation_history.append({"role": "候选人", "content": candidate_answer})
 
@@ -500,7 +647,7 @@ def real_data_interview_simulation():
 - 岗位: {candidate_data['position']}
 - 聪明度要求: {candidate_data['intelligence_requirement']}/10
 
-请从聪明度、皮实、勤奋三个维度简要评估，并给出1-2句建议或追问方向。
+请从聪明度、皮实、勤奋三个维度简要评估，尤其指出问题是想考察候选者哪方面的能力。以及候选者回答对考察问题所评估内容的符合程度。并给出1-2句建议或追问方向。
 """
 
             try:
@@ -528,6 +675,8 @@ def real_data_interview_simulation():
             "conversation_history": conversation_history,
             "interview_time": timestamp,
             "total_rounds": round_count,
+            "interview_mode": "agent" if agent_mode else "manual",
+            "mode_description": "AI候选人自动回答" if agent_mode else "用户手动回答",
         }
 
         record_file = f"real_data_interview_{timestamp}.json"
@@ -548,9 +697,12 @@ def real_data_interview_simulation():
 候选人信息:
 - 岗位: {candidate_data['position']}
 - 岗位聪明度要求: {candidate_data['intelligence_requirement']}/10
+- 面试模式: {'AI候选人自动回答模式' if agent_mode else '真人候选人回答模式'}
 
 完整对话记录:
 {format_conversation_history(conversation_history)}
+
+{'注意：本次面试使用AI候选人模拟，基于真实简历数据生成回答，评估仅供参考。' if agent_mode else ''}
 
 请提供：
 1. 聪明度评分 (1-10)
