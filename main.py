@@ -17,6 +17,9 @@ import traceback
 from menglong.utils.log import configure, get_logger
 from menglong.utils.log import print_json, print_message
 
+from interview_assistant import InterviewAssistant
+import pandas as pd
+
 
 # 时间
 configure(log_file=f"agent_run_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
@@ -313,8 +316,6 @@ def standard_interview_simulation():
 def real_data_interview_simulation():
     """真实数据面试模拟 - 候选人使用真实简历与HR助手对话"""
     try:
-        from interview_assistant import InterviewAssistant
-        import pandas as pd
 
         print_message("🤖 真实数据面试模拟")
         print_message("=" * 50)
@@ -970,7 +971,9 @@ def generate_questions_from_csv(assistant: "InterviewAssistant"):
             print(result["generated_questions"])
 
             # 保存结果，传递候选人ID
-            output_path = assistant.save_interview_plan(result, candidate_id=f"record_{record_id}")
+            output_path = assistant.save_interview_plan(
+                result, candidate_id=f"record_{record_id}"
+            )
 
             # 显示token使用情况
             token_usage = result.get("token_usage", {})
@@ -1120,36 +1123,36 @@ def view_json_reports():
     """查看JSON报告工具"""
     print_message("📊 JSON报告查看器")
     print_message("=" * 50)
-    
+
     try:
         # 获取所有JSON文件
         json_files = []
-        
+
         # 扫描根目录的JSON文件
         root_json_files = glob.glob("*.json")
         for file in root_json_files:
             json_files.append(("根目录", file))
-        
+
         # 扫描checkpoints目录的JSON文件
         if os.path.exists("checkpoints"):
             checkpoint_files = glob.glob("checkpoints/*.json")
             for file in checkpoint_files:
                 json_files.append(("checkpoints", file))
-        
+
         if not json_files:
             print("❌ 未找到任何JSON报告文件")
             return
-        
+
         # 按类型分组显示
         print("📁 可用的JSON报告文件:")
         print()
-        
+
         # 分类显示
         general_guidelines = []
         individual_experiences = []
         interview_plans = []
         other_files = []
-        
+
         for category, file_path in json_files:
             if "general_interview_guidelines" in file_path:
                 general_guidelines.append((category, file_path))
@@ -1159,10 +1162,10 @@ def view_json_reports():
                 interview_plans.append((category, file_path))
             else:
                 other_files.append((category, file_path))
-        
+
         file_index = 1
         all_files = []
-        
+
         # 显示通用面试提问经验
         if general_guidelines:
             print("📚 通用面试提问经验:")
@@ -1171,7 +1174,7 @@ def view_json_reports():
                 all_files.append((category, file_path))
                 file_index += 1
             print()
-        
+
         # 显示个人面试经验总结
         if individual_experiences:
             print("� 个人面试经验总结:")
@@ -1181,7 +1184,7 @@ def view_json_reports():
                 all_files.append((category, file_path))
                 file_index += 1
             print()
-        
+
         # 显示面试方案
         if interview_plans:
             print("� 面试方案:")
@@ -1190,7 +1193,7 @@ def view_json_reports():
                 all_files.append((category, file_path))
                 file_index += 1
             print()
-        
+
         # 显示其他文件
         if other_files:
             print("📄 其他JSON文件:")
@@ -1199,50 +1202,63 @@ def view_json_reports():
                 all_files.append((category, file_path))
                 file_index += 1
             print()
-        
+
         while True:
-            choice = input(f"请选择要查看的文件 (1-{len(all_files)}), 输入 'l' 重新列出, 或输入 'q' 退出: ").strip()
-            
-            if choice.lower() == 'q':
+            choice = input(
+                f"请选择要查看的文件 (1-{len(all_files)}), 输入 'l' 重新列出, 或输入 'q' 退出: "
+            ).strip()
+
+            if choice.lower() == "q":
                 break
-            elif choice.lower() == 'l':
+            elif choice.lower() == "l":
                 # 重新显示文件列表
                 print("\n📁 可用的JSON报告文件:")
                 print()
-                
+
                 # 重新显示通用面试提问经验
                 if general_guidelines:
                     print("📚 通用面试提问经验:")
                     for i, (category, file_path) in enumerate(general_guidelines, 1):
                         print(f"  {i}. {file_path}")
                     print()
-                
+
                 # 重新显示个人面试经验总结
                 if individual_experiences:
                     start_idx = len(general_guidelines) + 1
                     print("👤 个人面试经验总结:")
-                    for i, (category, file_path) in enumerate(individual_experiences, start_idx):
+                    for i, (category, file_path) in enumerate(
+                        individual_experiences, start_idx
+                    ):
                         filename = os.path.basename(file_path)
                         print(f"  {i}. {filename}")
                     print()
-                
+
                 # 重新显示面试方案
                 if interview_plans:
-                    start_idx = len(general_guidelines) + len(individual_experiences) + 1
+                    start_idx = (
+                        len(general_guidelines) + len(individual_experiences) + 1
+                    )
                     print("📋 面试方案:")
-                    for i, (category, file_path) in enumerate(interview_plans, start_idx):
+                    for i, (category, file_path) in enumerate(
+                        interview_plans, start_idx
+                    ):
                         print(f"  {i}. {file_path}")
                     print()
-                
+
                 # 重新显示其他文件
                 if other_files:
-                    start_idx = len(general_guidelines) + len(individual_experiences) + len(interview_plans) + 1
+                    start_idx = (
+                        len(general_guidelines)
+                        + len(individual_experiences)
+                        + len(interview_plans)
+                        + 1
+                    )
                     print("� 其他JSON文件:")
                     for i, (category, file_path) in enumerate(other_files, start_idx):
                         print(f"  {i}. {file_path}")
                     print()
                 continue
-            
+
             try:
                 choice_idx = int(choice) - 1
                 if 0 <= choice_idx < len(all_files):
@@ -1252,7 +1268,7 @@ def view_json_reports():
                     print("❌ 无效的选择，请重新输入")
             except ValueError:
                 print("❌ 请输入有效的数字、'l' 或 'q'")
-    
+
     except Exception as e:
         print(f"❌ 查看JSON报告失败: {e}")
         print(traceback.format_exc())
@@ -1263,10 +1279,10 @@ def view_json_file(file_path, show_full_content=False):
     try:
         print_message(f"\n📄 正在查看: {file_path}")
         print_message("=" * 60)
-        
-        with open(file_path, 'r', encoding='utf-8') as f:
+
+        with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        
+
         # 根据文件类型显示不同的信息
         if "general_interview_guidelines" in file_path:
             display_general_guidelines(data, show_full_content)
@@ -1276,10 +1292,10 @@ def view_json_file(file_path, show_full_content=False):
             display_plan_report(data, show_full_content)
         else:
             display_generic_json(data, show_full_content)
-        
+
         print_message("=" * 60)
         input("按回车键继续...")
-        
+
     except Exception as e:
         print(f"❌ 读取文件失败: {e}")
 
@@ -1291,46 +1307,50 @@ def display_general_guidelines(data, show_full_content=False):
     print(f"🎯 采样记录数: {data.get('sampled_records', 'N/A')}")
     print(f"🧠 成功提取数: {data.get('successful_extractions', 'N/A')}")
     print(f"📅 总结模式: {data.get('summary_mode', 'N/A')}")
-    
+
     # Token统计
-    if 'token_stats' in data:
-        tokens = data['token_stats']
+    if "token_stats" in data:
+        tokens = data["token_stats"]
         print(f"\n💰 Token使用统计:")
         print(f"  输入Tokens: {tokens.get('total_input_tokens', 0):,}")
         print(f"  输出Tokens: {tokens.get('total_output_tokens', 0):,}")
         print(f"  总成本: ${tokens.get('total_cost', 0):.6f}")
-    
+
     # 新提取的经验
-    if 'new_experiences' in data and data['new_experiences']:
+    if "new_experiences" in data and data["new_experiences"]:
         print(f"\n 新提取的经验 ({len(data['new_experiences'])}条):")
-        max_experiences = len(data['new_experiences']) if show_full_content else min(3, len(data['new_experiences']))
-        
-        for i, exp in enumerate(data['new_experiences'][:max_experiences], 1):
+        max_experiences = (
+            len(data["new_experiences"])
+            if show_full_content
+            else min(3, len(data["new_experiences"]))
+        )
+
+        for i, exp in enumerate(data["new_experiences"][:max_experiences], 1):
             print(f"\n  [{i}] 记录ID: {exp.get('record_id', 'N/A')}")
-            resume = exp.get('resume_summary', '')
+            resume = exp.get("resume_summary", "")
             if resume:
                 if show_full_content:
                     print(f"      简历摘要: {resume}")
                 else:
                     print(f"      简历摘要: {resume[:100]}...")
             print(f"      分析时间: {exp.get('analysis_time', 'N/A')}")
-            
+
             # 如果显示完整内容，也显示提取的经验
-            if show_full_content and 'extracted_experience' in exp:
+            if show_full_content and "extracted_experience" in exp:
                 print_message(f"      提取的经验:\n{exp['extracted_experience']}")
 
-        if not show_full_content and len(data['new_experiences']) > 3:
+        if not show_full_content and len(data["new_experiences"]) > 3:
             print(f"      ... 还有 {len(data['new_experiences']) - 3} 条经验")
-    
+
     # 集成经验
-    if 'integrated_experience' in data:
-        exp_text = data['integrated_experience']
+    if "integrated_experience" in data:
+        exp_text = data["integrated_experience"]
         print(f"\n📚 集成经验{'完整内容' if show_full_content else '预览'}:")
-        
+
         if show_full_content:
             print_message(exp_text)
         else:
-            lines = exp_text.split('\n')
+            lines = exp_text.split("\n")
             for line in lines[:10]:  # 显示前10行
                 if line.strip():
                     print(f"    {line}")
@@ -1343,47 +1363,49 @@ def display_individual_experience(data, show_full_content=False):
     print(f"🔄 记录ID: {data.get('record_id', 'N/A')}")
     print(f"📁 样本名称: {data.get('sample_name', 'N/A')}")
     print(f"⏰ 时间戳: {data.get('timestamp', 'N/A')}")
-    
+
     # 经验内容
-    if 'experience' in data:
-        exp = data['experience']
+    if "experience" in data:
+        exp = data["experience"]
         print(f"\n📋 经验内容:")
         print(f"  记录ID: {exp.get('record_id', 'N/A')}")
         print(f"  分析时间: {exp.get('analysis_time', 'N/A')}")
-        
+
         # 简历摘要
-        if 'resume_summary' in exp:
-            resume = exp['resume_summary']
-            print_message(f"\n  👤 简历摘要{'完整内容' if show_full_content else '预览'}:")
-            
+        if "resume_summary" in exp:
+            resume = exp["resume_summary"]
+            print_message(
+                f"\n  👤 简历摘要{'完整内容' if show_full_content else '预览'}:"
+            )
+
             if show_full_content:
                 print(f"      {resume}")
             else:
-                lines = resume.split('\n')
+                lines = resume.split("\n")
                 for line in lines[:3]:
                     if line.strip():
                         print(f"      {line}")
                 if len(lines) > 3:
                     print(f"      ... (还有 {len(lines) - 3} 行)")
-        
+
         # 评估内容
-        if 'evaluation' in exp:
-            evaluation = exp['evaluation']
+        if "evaluation" in exp:
+            evaluation = exp["evaluation"]
             print(f"\n  📊 评估{'完整内容' if show_full_content else '预览'}:")
             if show_full_content:
                 print_message(f"      {evaluation}")
             else:
                 print(f"      {evaluation[:200]}...")
-        
+
         # 提取的经验
-        if 'extracted_experience' in exp:
-            extracted = exp['extracted_experience']
+        if "extracted_experience" in exp:
+            extracted = exp["extracted_experience"]
             print(f"\n  🧠 提取经验{'完整内容' if show_full_content else '预览'}:")
-            
+
             if show_full_content:
                 print_message(extracted)
             else:
-                lines = extracted.split('\n')
+                lines = extracted.split("\n")
                 for line in lines[:5]:
                     if line.strip():
                         print(f"      {line}")
@@ -1398,46 +1420,50 @@ def display_experience_report(data, show_full_content=False):
     print(f"🎯 采样记录数: {data.get('sampled_records', 'N/A')}")
     print(f"🧠 成功提取数: {data.get('successful_extractions', 'N/A')}")
     print(f"📅 总结模式: {data.get('summary_mode', 'N/A')}")
-    
+
     # Token统计
-    if 'token_stats' in data:
-        tokens = data['token_stats']
+    if "token_stats" in data:
+        tokens = data["token_stats"]
         print(f"\n💰 Token使用统计:")
         print(f"  输入Tokens: {tokens.get('total_input_tokens', 0):,}")
         print(f"  输出Tokens: {tokens.get('total_output_tokens', 0):,}")
         print(f"  总成本: ${tokens.get('total_cost', 0):.6f}")
-    
+
     # 新提取的经验
-    if 'new_experiences' in data and data['new_experiences']:
+    if "new_experiences" in data and data["new_experiences"]:
         print(f"\n 新提取的经验 ({len(data['new_experiences'])}条):")
-        max_experiences = len(data['new_experiences']) if show_full_content else min(3, len(data['new_experiences']))
-        
-        for i, exp in enumerate(data['new_experiences'][:max_experiences], 1):
+        max_experiences = (
+            len(data["new_experiences"])
+            if show_full_content
+            else min(3, len(data["new_experiences"]))
+        )
+
+        for i, exp in enumerate(data["new_experiences"][:max_experiences], 1):
             print(f"\n  [{i}] 记录ID: {exp.get('record_id', 'N/A')}")
-            resume = exp.get('resume_summary', '')
+            resume = exp.get("resume_summary", "")
             if resume:
                 if show_full_content:
                     print_message(f"      简历摘要: {resume}")
                 else:
                     print(f"      简历摘要: {resume[:100]}...")
             print(f"      分析时间: {exp.get('analysis_time', 'N/A')}")
-            
+
             # 如果显示完整内容，也显示提取的经验
-            if show_full_content and 'extracted_experience' in exp:
+            if show_full_content and "extracted_experience" in exp:
                 print_message(f"      提取的经验:\n{exp['extracted_experience']}")
-        
-        if not show_full_content and len(data['new_experiences']) > 3:
+
+        if not show_full_content and len(data["new_experiences"]) > 3:
             print(f"      ... 还有 {len(data['new_experiences']) - 3} 条经验")
-    
+
     # 集成经验
-    if 'integrated_experience' in data:
-        exp_text = data['integrated_experience']
+    if "integrated_experience" in data:
+        exp_text = data["integrated_experience"]
         print(f"\n📚 集成经验{'完整内容' if show_full_content else '预览'}:")
-        
+
         if show_full_content:
             print_message(exp_text)
         else:
-            lines = exp_text.split('\n')
+            lines = exp_text.split("\n")
             for line in lines[:10]:  # 显示前10行
                 if line.strip():
                     print(f"    {line}")
@@ -1448,58 +1474,58 @@ def display_experience_report(data, show_full_content=False):
 def display_plan_report(data, show_full_content=False):
     """显示面试计划报告"""
     print(f"📅 生成时间: {data.get('generation_time', 'N/A')}")
-    
+
     # 候选人简历
-    if 'candidate_resume' in data:
-        resume = data['candidate_resume']
+    if "candidate_resume" in data:
+        resume = data["candidate_resume"]
         print(f"\n👤 候选人简历{'完整内容' if show_full_content else '预览'}:")
-        
+
         if show_full_content:
             print_message(resume)
         else:
-            lines = resume.split('\n')
+            lines = resume.split("\n")
             for line in lines[:5]:
                 if line.strip():
                     print(f"    {line}")
             if len(lines) > 5:
                 print(f"    ... (还有 {len(lines) - 5} 行)")
-    
+
     # 职位描述
-    if 'job_description' in data:
-        jd = data['job_description']
+    if "job_description" in data:
+        jd = data["job_description"]
         print(f"\n💼 职位描述{'完整内容' if show_full_content else '预览'}:")
-        
+
         if show_full_content:
             print_message(jd)
         else:
-            lines = jd.split('\n')
+            lines = jd.split("\n")
             for line in lines[:5]:
                 if line.strip():
                     print(f"    {line}")
             if len(lines) > 5:
                 print(f"    ... (还有 {len(lines) - 5} 行)")
-    
+
     # 关注领域
-    if 'focus_areas' in data:
+    if "focus_areas" in data:
         print(f"\n🎯 关注领域: {', '.join(data['focus_areas'])}")
-    
+
     # Token使用情况
-    if 'token_usage' in data:
-        tokens = data['token_usage']
+    if "token_usage" in data:
+        tokens = data["token_usage"]
         print(f"\n💰 Token使用统计:")
         print(f"  输入Tokens: {tokens.get('input_tokens', 0):,}")
         print(f"  输出Tokens: {tokens.get('output_tokens', 0):,}")
         print(f"  总Tokens: {tokens.get('total_tokens', 0):,}")
-    
+
     # 生成的问题预览
-    if 'generated_questions' in data:
-        questions = data['generated_questions']
+    if "generated_questions" in data:
+        questions = data["generated_questions"]
         print(f"\n❓ 生成的问题{'完整内容' if show_full_content else '预览'}:")
-        
+
         if show_full_content:
             print(questions)
         else:
-            lines = questions.split('\n')
+            lines = questions.split("\n")
             for line in lines[:15]:
                 if line.strip():
                     print(f"    {line}")
@@ -1512,47 +1538,47 @@ def display_checkpoint_file(data, show_full_content=False):
     print(f"🔄 记录ID: {data.get('record_id', 'N/A')}")
     print(f"📁 样本名称: {data.get('sample_name', 'N/A')}")
     print(f"⏰ 时间戳: {data.get('timestamp', 'N/A')}")
-    
+
     # 经验内容
-    if 'experience' in data:
-        exp = data['experience']
+    if "experience" in data:
+        exp = data["experience"]
         print(f"\n📋 经验内容:")
         print(f"  记录ID: {exp.get('record_id', 'N/A')}")
         print(f"  分析时间: {exp.get('analysis_time', 'N/A')}")
-        
+
         # 简历摘要
-        if 'resume_summary' in exp:
-            resume = exp['resume_summary']
+        if "resume_summary" in exp:
+            resume = exp["resume_summary"]
             print(f"\n  👤 简历摘要{'完整内容' if show_full_content else '预览'}:")
-            
+
             if show_full_content:
                 print(f"      {resume}")
             else:
-                lines = resume.split('\n')
+                lines = resume.split("\n")
                 for line in lines[:3]:
                     if line.strip():
                         print(f"      {line}")
                 if len(lines) > 3:
                     print(f"      ... (还有 {len(lines) - 3} 行)")
-        
+
         # 评估内容
-        if 'evaluation' in exp:
-            evaluation = exp['evaluation']
+        if "evaluation" in exp:
+            evaluation = exp["evaluation"]
             print(f"\n  📊 评估{'完整内容' if show_full_content else '预览'}:")
             if show_full_content:
                 print(f"      {evaluation}")
             else:
                 print(f"      {evaluation[:200]}...")
-        
+
         # 提取的经验
-        if 'extracted_experience' in exp:
-            extracted = exp['extracted_experience']
+        if "extracted_experience" in exp:
+            extracted = exp["extracted_experience"]
             print(f"\n  🧠 提取经验{'完整内容' if show_full_content else '预览'}:")
-            
+
             if show_full_content:
                 print(extracted)
             else:
-                lines = extracted.split('\n')
+                lines = extracted.split("\n")
                 for line in lines[:5]:
                     if line.strip():
                         print(f"      {line}")
@@ -1562,22 +1588,25 @@ def display_checkpoint_file(data, show_full_content=False):
 
 def display_generic_json(data, show_full_content=False):
     """显示通用JSON数据"""
+
     def print_value(key, value, indent=0, full_content=False):
         prefix = "  " * indent
         if isinstance(value, dict):
             print(f"{prefix}{key}:")
-            items_to_show = list(value.items()) if full_content else list(value.items())[:5]
-            
+            items_to_show = (
+                list(value.items()) if full_content else list(value.items())[:5]
+            )
+
             for k, v in items_to_show:
                 print_value(k, v, indent + 1, full_content)
-            
+
             if not full_content and len(value) > 5:
                 print(f"{prefix}  ... (还有 {len(value) - 5} 个键)")
-                
+
         elif isinstance(value, list):
             print(f"{prefix}{key}: [列表，{len(value)} 个项目]")
             items_to_show = value if full_content else value[:3]
-            
+
             for i, item in enumerate(items_to_show):
                 if isinstance(item, (dict, list)):
                     print(f"{prefix}  [{i}]: {type(item).__name__}")
@@ -1589,10 +1618,10 @@ def display_generic_json(data, show_full_content=False):
                     if not full_content and len(item_str) > 100:
                         item_str = item_str[:100] + "..."
                     print(f"{prefix}  [{i}]: {item_str}")
-            
+
             if not full_content and len(value) > 3:
                 print(f"{prefix}  ... (还有 {len(value) - 3} 个项目)")
-                
+
         elif isinstance(value, str):
             if not full_content and len(value) > 200:
                 print(f"{prefix}{key}: {value[:200]}...")
@@ -1600,13 +1629,13 @@ def display_generic_json(data, show_full_content=False):
                 print(f"{prefix}{key}: {value}")
         else:
             print(f"{prefix}{key}: {value}")
-    
+
     print(f"📄 JSON数据{'完整内容' if show_full_content else '预览'}:")
     items_to_show = list(data.items()) if show_full_content else list(data.items())[:10]
-    
+
     for key, value in items_to_show:
         print_value(key, value, full_content=show_full_content)
-    
+
     if not show_full_content and len(data) > 10:
         print(f"  ... (还有 {len(data) - 10} 个键)")
 
