@@ -72,7 +72,7 @@ class EvalAssistant:
 
 【候选人背景】
 - 岗位: {candidate_info.get("position", "未知")}
-- 聪明度要求: {candidate_info.get("intelligence_requirement", "N/A")}/10
+- 聪明度要求: {candidate_info.get("intelligence_requirement", "N/A")}/100
 
 【面试问题】
 {question}

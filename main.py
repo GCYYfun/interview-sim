@@ -542,7 +542,7 @@ def real_data_interview_simulation():
             print_message("✅ AI候选人已就绪，基于以下简历背景:")
             print_message(f"   岗位: {info_summary['position']}")
             print_message(
-                f"   聪明度要求: {info_summary['intelligence_requirement']}/10"
+                f"   聪明度要求: {info_summary['intelligence_requirement']}/100"
             )
             print_message(f"   简历预览: {info_summary['resume_preview']}")
             print_message("\n🎭 AI候选人将根据简历背景智能回答面试问题")
@@ -699,9 +699,9 @@ def real_data_interview_simulation():
             print_message(final_evaluation)
 
             print_message("\n📊 各轮评估平均分:")
-            print_message(f"聪明度: {avg_scores.get('聪明度', 0)}/10")
-            print_message(f"皮实: {avg_scores.get('皮实', 0)}/10")
-            print_message(f"勤奋: {avg_scores.get('勤奋', 0)}/10")
+            print_message(f"聪明度: {avg_scores.get('聪明度', 0)}/100")
+            print_message(f"皮实: {avg_scores.get('皮实', 0)}/100")
+            print_message(f"勤奋: {avg_scores.get('勤奋', 0)}/100")
 
             # 更新面试记录，包含评估详情
             interview_record["evaluation_details"] = {
