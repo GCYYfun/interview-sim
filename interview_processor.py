@@ -260,7 +260,7 @@ class InterviewDataProcessor:
                 evaluation[:80] + "..." if len(evaluation) > 80 else evaluation
             )
 
-            print(f"{i+1:2d}. 岗位: {position}")
+            print(f"{i + 1:2d}. 岗位: {position}")
             print(f"    简历: {resume_preview}")
             print(f"    评价: {evaluation_preview}")
             print()
@@ -606,7 +606,7 @@ class InterviewDataProcessor:
             ]
 
             for i, col in enumerate(result_cols[:2]):  # 最多分析2轮面试
-                round_name = f"第{i+1}轮面试" if i < 2 else col
+                round_name = f"第{i + 1}轮面试" if i < 2 else col
 
                 if col in self.df.columns:
                     col_results = self.df[col].astype(str).value_counts()

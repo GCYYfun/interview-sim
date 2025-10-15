@@ -18,6 +18,7 @@ from menglong.utils.log import configure, get_logger
 from menglong.utils.log import print_json, print_message
 
 from interview_assistant import InterviewAssistant
+from eval_assistant import EvalAssistant
 import pandas as pd
 
 
@@ -429,12 +430,12 @@ def standard_interview_simulation():
 def real_data_interview_simulation():
     """真实数据面试模拟 - 候选人使用真实简历与HR助手对话"""
     try:
-
         print_message("🤖 真实数据面试模拟")
         print_message("=" * 50)
 
-        # 初始化面试助手
+        # 初始化面试助手和评估助手
         assistant = InterviewAssistant()
+        eval_assistant = EvalAssistant()  # 新增评估助手
 
         # 加载并显示候选人数据
         df = pd.read_csv("interview_data.csv")
@@ -636,31 +637,22 @@ def real_data_interview_simulation():
 
             conversation_history.append({"role": "候选人", "content": candidate_answer})
 
-            # HR评估 (基于回答生成反馈)
-            evaluation_prompt = f"""
-作为专业HR，请评估候选人对以下问题的回答：
+            # HR评估 - 使用专业评估助手
+            print_message("\n[HR评估中...]")
 
-问题: {hr_question}
-回答: {candidate_answer}
+            # 使用EvalAssistant进行评估
+            eval_result = eval_assistant.evaluate_single_response(
+                question=hr_question,
+                answer=candidate_answer,
+                candidate_info=candidate_data,
+                question_intent="",  # 可以根据面试方案提取问题意图
+            )
 
-候选人背景:
-- 岗位: {candidate_data['position']}
-- 聪明度要求: {candidate_data['intelligence_requirement']}/10
+            evaluation = eval_result.get("evaluation", "评估失败")
+            print_message(f"\n[HR评估]: {evaluation}")
 
-请从聪明度、皮实、勤奋三个维度简要评估，尤其指出问题是想考察候选者哪方面的能力。以及候选者回答对考察问题所评估内容的符合程度。并给出1-2句建议或追问方向。
-"""
-
-            try:
-                model = Model()
-                eval_response = model.chat([user(content=evaluation_prompt)])
-                evaluation = assistant._extract_response_text(eval_response)
-
-                print_message(f"\n[HR评估]: {evaluation}")
-                conversation_history.append({"role": "HR评估", "content": evaluation})
-
-            except Exception as e:
-                print_message(f"⚠️ 生成评估时出错: {e}")
-                print_message("[HR评估]: 感谢您的回答，让我们继续下一个问题。")
+            # 保存评估到对话历史
+            conversation_history.append({"role": "HR评估", "content": evaluation})
 
         # 面试总结
         print_message("\n" + "=" * 60)
@@ -690,34 +682,33 @@ def real_data_interview_simulation():
             print_message(f"⚠️ 保存面试记录失败: {e}")
 
         # 生成最终评估
+        print_message("\n🎯 正在生成最终综合评估...")
+
         try:
-            final_evaluation_prompt = f"""
-作为资深HR，请对这次面试进行综合评估：
+            # 使用EvalAssistant生成最终评估
+            final_result = eval_assistant.generate_final_evaluation(
+                candidate_info=candidate_data, conversation_history=conversation_history
+            )
 
-候选人信息:
-- 岗位: {candidate_data['position']}
-- 岗位聪明度要求: {candidate_data['intelligence_requirement']}/10
-- 面试模式: {'AI候选人自动回答模式' if agent_mode else '真人候选人回答模式'}
+            final_evaluation = final_result.get("final_evaluation", "评估失败")
+            avg_scores = final_result.get("average_scores", {})
 
-完整对话记录:
-{format_conversation_history(conversation_history)}
-
-{'注意：本次面试使用AI候选人模拟，基于真实简历数据生成回答，评估仅供参考。' if agent_mode else ''}
-
-请提供：
-1. 聪明度评分 (1-10)
-2. 皮实评分 (1-10)  
-3. 勤奋评分 (1-10)
-4. 总体推荐意见 (推荐/考虑/不推荐)
-5. 主要优势和改进建议
-"""
-
-            model = Model()
-            final_response = model.chat([user(content=final_evaluation_prompt)])
-            final_evaluation = assistant._extract_response_text(final_response)
-
-            print_message("🎯 最终评估:")
+            print_message("\n" + "=" * 80)
+            print_message("🎯 最终综合评估与复盘")
+            print_message("=" * 80)
             print_message(final_evaluation)
+
+            print_message("\n📊 各轮评估平均分:")
+            print_message(f"聪明度: {avg_scores.get('聪明度', 0)}/10")
+            print_message(f"皮实: {avg_scores.get('皮实', 0)}/10")
+            print_message(f"勤奋: {avg_scores.get('勤奋', 0)}/10")
+
+            # 更新面试记录，包含评估详情
+            interview_record["evaluation_details"] = {
+                "round_evaluations": eval_assistant.round_evaluations,
+                "final_evaluation": final_result,
+                "average_scores": avg_scores,
+            }
 
         except Exception as e:
             print_message(f"⚠️ 生成最终评估时出错: {e}")
@@ -965,7 +956,7 @@ def analyze_interview_data():
                             candidate_info = processor.extract_candidate_info(
                                 candidates.index[i]
                             )
-                            print_message(f"\n候选人 {i+1}:")
+                            print_message(f"\n候选人 {i + 1}:")
                             print_message(
                                 f"岗位: {candidate_info['raw_data'].get('岗位名称', '未知')}"
                             )
