@@ -28,6 +28,11 @@ uv sync
 source .venv/bin/activate
 ```
 
+### 更新menlong sdk
+```bash
+uv add --refresh --upgrade-package menglong https://github.com/gcyyfun/menglong.git
+```
+
 ### SDK 配置
 
 项目已迁移至 `menglong` SDK。请在项目根目录创建 `.configs.toml` 并配置 Provider 密钥：
