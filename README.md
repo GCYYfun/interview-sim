@@ -28,7 +28,7 @@ uv sync
 source .venv/bin/activate
 ```
 
-### 更新menlong sdk
+### 更新 menglong sdk
 ```bash
 uv add --refresh --upgrade-package menglong https://github.com/gcyyfun/menglong.git
 ```
@@ -113,3 +113,4 @@ uv run evaluator.py --name zhangsan_rm_transcript_1 --temp --force
 ## 进阶技巧
 - **Quiet 模式**: 使用 `--quiet` 在后台静默运行模拟。
 - **Temp 模式**: 使用 `--temp` 将结果保存到 `data/generated/temp/`，带时间戳，适合实验。
+
