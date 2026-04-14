@@ -3400,6 +3400,8 @@
 	}
 
 	.parse-preview-body {
-		max-height: 320px;
+		max-height: 260px;
+		overflow-y: auto;
+		border-radius: 6px;
 	}
 </style>
