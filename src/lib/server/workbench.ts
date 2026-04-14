@@ -766,7 +766,7 @@ export function mapNotebookDetailView(
 			title: output.title,
 			summary: output.summary,
 			content: output.content,
-			updatedAgo: output.updatedAgoLabel,
+			updatedAgo: timeAgoLabel(output.createdAt),
 			progress: output.progress ? output.progress / 100 : undefined,
 			duration: output.duration ?? undefined
 		})),

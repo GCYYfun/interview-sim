@@ -1025,7 +1025,7 @@
 			</div>
 
 			<div class="tool-grid">
-				{#each data.notebook.studioTools as tool}
+				{#each data.notebook.studioTools.filter(t => t.key !== 'audio-overview' || data.debug) as tool}
 					<button type="button" class="tool-card" onclick={() => openToolModal(tool)}>
 						<Icon name={tool.icon} size={18} />
 						<strong>{tool.title}</strong>
@@ -1539,8 +1539,8 @@
 					<label>
 						<span class="label">评估模式</span>
 						<select class="input-field" bind:value={analysisConfig.evaluationMode}>
-							<option value="basic">基础模式（推荐）</option>
-							<option value="advanced">进阶模式（实验性）</option>
+							<option value="basic">基础模式</option>
+							<option value="advanced" disabled>进阶模式</option>
 						</select>
 					</label>
 

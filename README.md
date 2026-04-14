@@ -41,13 +41,13 @@ cp .env.example .env
 本项目使用 Drizzle ORM，首次启动前需要将 Schema 同步到本地数据库文件：
 
 ```bash
-npm run db:push
+pnpm run db:push
 ```
 
 ### 4. 启动开发服务器
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 现在访问 [http://localhost:5173](http://localhost:5173) 即可开启。
