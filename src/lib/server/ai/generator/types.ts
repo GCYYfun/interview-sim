@@ -1,26 +1,15 @@
-import type { Action, Response, Usage } from '$menglong';
+import type { Action, Response, Usage, PropertySchema, ToolInfo } from '$menglong';
 
 export type ExecutableTool = {
 	name: string;
 	description: string;
 	parameters: {
 		type: 'object';
-		properties: Record<string, { type: string; description: string; enum?: string[] }>;
+		properties: Record<string, PropertySchema>;
 		required?: string[];
 	};
 	handler: (params: Record<string, unknown>) => Promise<unknown> | unknown;
-	schema: () => {
-		type: 'function';
-		function: {
-			name: string;
-			description: string;
-			parameters: {
-				type: 'object';
-				properties: Record<string, { type: string; description: string; enum?: string[] }>;
-				required?: string[];
-			};
-		};
-	};
+	schema: () => ToolInfo;
 };
 
 export type GeneratorRunInput = {

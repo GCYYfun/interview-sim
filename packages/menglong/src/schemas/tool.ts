@@ -1,17 +1,26 @@
 /**
  * MengLong TypeScript SDK
  * 工具定义类型
- * 
+ *
  * 对应 Python 版 menglong/schemas/tool.py
  */
 
+/** JSON Schema property 定义，支持嵌套 object / array 等复杂结构 */
+export interface PropertySchema {
+  type: string;
+  description?: string;
+  enum?: string[] | number[];
+  default?: unknown;
+  minimum?: number;
+  maximum?: number;
+  items?: PropertySchema;
+  properties?: Record<string, PropertySchema>;
+  required?: string[];
+}
+
 export interface FunctionParameters {
   type: 'object';
-  properties: Record<string, {
-    type: string;
-    description: string;
-    enum?: string[];
-  }>;
+  properties: Record<string, PropertySchema>;
   required?: string[];
 }
 
@@ -29,7 +38,7 @@ export interface ToolInfo {
 
 /**
  * @tool 装饰器的替代：将函数标注为 MengLong 工具
- * 
+ *
  * @example
  * ```typescript
  * const myTool = defineTool({

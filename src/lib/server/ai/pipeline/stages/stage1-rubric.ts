@@ -2,6 +2,7 @@ import type { ExecutableTool } from '$lib/server/ai/generator/types';
 import { createNotebookGeneratorTools } from '$lib/server/ai/generator/tools';
 import { createGetDimensionRubricTool } from '../tools/get-dimension-rubric';
 import { createSubmitEvaluationResultTool } from '../tools/submit-evaluation-result';
+import { createSubmitDimensionResultTool, parseDimensionResult } from '../tools/submit-dimension-result';
 import { runStageGenerator, loadPrompt } from './runner';
 import { runStageBasic, loadPrompt as loadBasicPrompt, extractDimensionSection } from './runner-basic';
 import type { DimensionKey, PipelineEvent } from '../types';
@@ -23,13 +24,20 @@ export async function* runStage1Rubric(
 		const cv = detail.sources.find((s) => s.sourceType === 'resume')?.content ?? '[简历未提供]';
 		const jd = detail.sources.find((s) => s.sourceType === 'job-description')?.content ?? '[JD 未提供]';
 
-		return yield* runStageBasic('rubric-rater.md', {
-			PIPELINE_DIMENSION_NAME: dimension,
-			PIPELINE_DIMENSION_RUBRIC: section,
-			PIPELINE_TRANSCRIPT: transcript,
-			PIPELINE_CV: cv,
-			PIPELINE_JD: jd
-		}, 'pipeline/basic', DIMENSION_STAGE_MAP[dimension]);
+		return yield* runStageBasic(
+			'rubric-rater.md',
+			{
+				PIPELINE_DIMENSION_NAME: dimension,
+				PIPELINE_DIMENSION_RUBRIC: section,
+				PIPELINE_TRANSCRIPT: transcript,
+				PIPELINE_CV: cv,
+				PIPELINE_JD: jd
+			},
+			'pipeline/basic',
+			DIMENSION_STAGE_MAP[dimension],
+			createSubmitDimensionResultTool(dimension),
+			parseDimensionResult
+		);
 	}
 
 	// 进阶模式：Agent 自取数据

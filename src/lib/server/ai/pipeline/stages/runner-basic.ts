@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { Model, Context, MengLongProvider, ProviderRegistry, ConsoleLogger } from '$menglong';
 import { env } from '$env/dynamic/private';
 import type { Config } from '$menglong';
+import type { ExecutableTool } from '$lib/server/ai/generator/types';
 import type { PipelineEvent, DimensionKey } from '../types';
 import { createSubmitEvaluationResultTool, parseSubmittedResult } from '../tools/submit-evaluation-result';
 import { debugLog, log } from '../debug-log';
@@ -78,35 +79,34 @@ export async function* runStageBasic(
 	promptFile: string,
 	vars: Record<string, string>,
 	promptDir = 'pipeline/basic',
-	stageId: import('../types').PipelineStageId = 'stage1a'
+	stageId: import('../types').PipelineStageId = 'stage1a',
+	submitTool?: ExecutableTool,
+	parseResult?: (args: Record<string, unknown>) => unknown
 ): AsyncGenerator<PipelineEvent, unknown> {
 	yield { type: 'status', message: '准备数据...' };
 
+	// 使用传入的专属工具，否则回退到通用工具（需在拼接 userMessage 前确定工具名）
+	const resolvedSubmitTool = submitTool ?? createSubmitEvaluationResultTool();
+	const resolvedParse = parseResult ?? parseSubmittedResult;
+	const toolName = resolvedSubmitTool.schema().function.name;
+
 	const template = await loadPrompt(`${promptDir}/${promptFile}`);
-	// 在用户消息末尾添加工具调用指令
+	// 在用户消息末尾追加工具调用指令，工具名随注入工具动态变化
 	const userMessage = fillPlaceholders(template, vars) + `
 
-重要：请调用 submit_evaluation_result 工具提交你的评估结果，不要直接输出 JSON 文本。
+重要：完成分析后，请调用 ${toolName} 工具提交你的评估结果，不要直接输出 JSON 文本。`;
 
-工具说明：
-- 工具名称：submit_evaluation_result
-- 功能：提交本阶段的结构化评估结果
-- 参数：{"result": "JSON字符串"}
-- 注意：result 字段必须是合法 JSON 字符串，按照上面的输出 Schema 格式化`;
-
-	const systemMessage = '你是专业的结构化面试评估专家。严格按照用户消息中的规则和数据进行分析，完成分析后调用 submit_evaluation_result 工具提交结构化评估结果。';
+	const systemMessage = `你是专业的结构化面试评估专家。严格按照用户消息中的规则和数据进行分析，完成分析后调用 ${toolName} 工具提交结构化评估结果。`;
 
 	const model = createPipelineModel();
 	const context = new Context();
 	context.system(systemMessage);
 	context.user(userMessage);
 
-	const submitTool = createSubmitEvaluationResultTool();
-
 	yield { type: 'status', message: '分析中...' };
 
 	// 添加控制台调试日志
-	log(`[${stageId}] 开始流式调用，工具定义:`, JSON.stringify(submitTool.schema(), null, 2));
+	log(`[${stageId}] 开始流式调用，工具定义:`, JSON.stringify(resolvedSubmitTool.schema(), null, 2));
 	log(`[${stageId}] 系统消息:`, systemMessage);
 	log(`[${stageId}] 用户消息长度:`, userMessage.length);
 
@@ -122,12 +122,12 @@ export async function* runStageBasic(
 
 	// 使用流式调用，强制要求调用工具
 	log(`[${stageId}] 开始调用 model.streamChat()...`);
-	log(`[${stageId}] 工具定义:`, JSON.stringify(submitTool.schema(), null, 2));
+	log(`[${stageId}] 工具定义:`, JSON.stringify(resolvedSubmitTool.schema(), null, 2));
 	log(`[${stageId}] 消息数量:`, context.messages.length);
 
 	try {
 		for await (const chunk of model.streamChat(context, undefined, {
-			tools: [submitTool.schema()],
+			tools: [resolvedSubmitTool.schema()],
 			tool_choice: 'auto',  // 使用 auto，让 LLM 决定是否调用工具
 			max_tokens: 60000  // 设置足够的 token 空间，确保能完成工具调用
 		})) {
@@ -283,12 +283,12 @@ export async function* runStageBasic(
 	yield llmCallEvent;
 
 	// 检查是否有 tool call
-	const submitAction = finalActions?.find(a => a.name === 'submit_evaluation_result');
+	const submitAction = finalActions?.find(a => a.name === toolName);
 	if (submitAction) {
 		// 发送工具调用完成的消息
 		yield {
 			type: 'tool' as const,
-			name: 'submit_evaluation_result',
+			name: toolName,
 			message: '工具调用完成，正在解析评估结果...',
 			stage: stageId,
 			args: submitAction.arguments
@@ -300,13 +300,13 @@ export async function* runStageBasic(
 		// 发送结果解析完成的消息
 		yield {
 			type: 'tool' as const,
-			name: 'submit_evaluation_result',
+			name: toolName,
 			message: '评估结果解析完成',
 			stage: stageId,
-			result: parseSubmittedResult(args)
+			result: resolvedParse(args)
 		};
 
-		return parseSubmittedResult(args);
+		return resolvedParse(args);
 	}
 
 	// 如果没有 tool call，检查是否有文本响应
@@ -317,7 +317,7 @@ export async function* runStageBasic(
 			message: `LLM 没有调用工具，而是返回了文本。可能是 prompt 格式问题。`,
 			stage: stageId
 		};
-		throw new Error(`基础模式 LLM 未调用 submit_evaluation_result，而是返回了文本: ${accumulatedText.slice(0, 200)}`);
+		throw new Error(`基础模式 LLM 未调用 ${toolName}，而是返回了文本: ${accumulatedText.slice(0, 200)}`);
 	}
 
 	yield {
@@ -326,7 +326,7 @@ export async function* runStageBasic(
 		message: `LLM 既没有调用工具也没有返回文本。可能是工具调用失败或 prompt 格式问题。`,
 		stage: stageId
 	};
-	throw new Error('基础模式 LLM 未调用 submit_evaluation_result 且无文本响应');
+	throw new Error(`基础模式 LLM 未调用 ${toolName} 且无文本响应`);
 }
 
 function normalizeArgs(input: import('$menglong').Action['arguments']): Record<string, unknown> {

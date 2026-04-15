@@ -1,6 +1,7 @@
 import type { ExecutableTool } from '$lib/server/ai/generator/types';
 import { createNotebookGeneratorTools } from '$lib/server/ai/generator/tools';
 import { createSubmitEvaluationResultTool } from '../tools/submit-evaluation-result';
+import { createSubmitJobFitResultTool, parseJobFitResult } from '../tools/submit-job-fit-result';
 import { runStageGenerator, loadPrompt } from './runner';
 import { runStageBasic } from './runner-basic';
 import type { PipelineEvent } from '../types';
@@ -19,11 +20,14 @@ export async function* runStage1a(
 		const cv = detail.sources.find((s) => s.sourceType === 'resume')?.content ?? '[简历未提供]';
 		const transcript = detail.sources.find((s) => s.sourceType === 'conversation')?.content ?? '[面试记录未提供]';
 
-		return yield* runStageBasic('job-fit-rater.md', {
-			PIPELINE_JD: jd,
-			PIPELINE_CV: cv,
-			PIPELINE_TRANSCRIPT: transcript
-		}, 'pipeline/basic', 'stage1a');
+		return yield* runStageBasic(
+			'job-fit-rater.md',
+			{ PIPELINE_JD: jd, PIPELINE_CV: cv, PIPELINE_TRANSCRIPT: transcript },
+			'pipeline/basic',
+			'stage1a',
+			createSubmitJobFitResultTool(),
+			parseJobFitResult
+		);
 	}
 
 	// 进阶模式：Agent 自取数据
