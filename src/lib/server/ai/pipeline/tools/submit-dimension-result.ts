@@ -223,7 +223,14 @@ export function createSubmitDimensionResultTool(dimension: DimensionKey) {
 /** 将工具参数重组为 rubric-rater.md 输出 Schema 格式 */
 export function parseDimensionResult(args: Record<string, unknown>): unknown {
 	const overall = args.overall as Record<string, unknown>;
-	const subdimensions = (args.subdimensions as Record<string, unknown>[]) ?? [];
+
+	// LLM 偶尔会违反 schema，把 array 字段返回成 object（{}）。
+	// ?? [] 只对 null/undefined 生效，必须用 Array.isArray() 兜底。
+	function toArray<T>(v: unknown): T[] {
+		return Array.isArray(v) ? (v as T[]) : [];
+	}
+
+	const subdimensions = toArray<Record<string, unknown>>(args.subdimensions);
 
 	return {
 		'维度(Dimension)': args.dimension,
@@ -240,11 +247,11 @@ export function parseDimensionResult(args: Record<string, unknown>): unknown {
 				'名称(Name)': sub.name,
 				'是否被问到(Elicited)': sub.elicited,
 				'计数(Count)': {
-					'总证据点数(Total Items, T)': count.total_items,
-					'被问到数(Elicited Count, E)': count.elicited_count,
-					'被展示数(Demonstrated Count, D)': count.demonstrated_count
+					'总证据点数(Total Items, T)': count?.total_items,
+					'被问到数(Elicited Count, E)': count?.elicited_count,
+					'被展示数(Demonstrated Count, D)': count?.demonstrated_count
 				},
-				'证据点列表(Evidence Points)': ((sub.evidence_points as Record<string, unknown>[]) ?? []).map((ep) => {
+				'证据点列表(Evidence Points)': toArray<Record<string, unknown>>(sub.evidence_points).map((ep) => {
 					const pq = ep.primary_quote as Record<string, unknown>;
 					const sq = ep.secondary_quote as Record<string, unknown> | undefined;
 					const sr = ep.scoring_rationale as Record<string, unknown>;
@@ -256,30 +263,30 @@ export function parseDimensionResult(args: Record<string, unknown>): unknown {
 						'是否被问到(Elicited)': ep.elicited,
 						'是否展示(Demonstrated)': ep.demonstrated,
 						'强度分数(Strength 0-3)': ep.strength,
-						'主证据(Primary Quote)': { speaker: pq.speaker, quote: pq.quote },
+						'主证据(Primary Quote)': { speaker: pq?.speaker, quote: pq?.quote },
 						...(sq ? { '次证据(Secondary Quote, optional)': { speaker: sq.speaker, quote: sq.quote } } : {}),
 						'评分依据(Scoring Rationale)': {
-							'面试官问了什么(Question Asked)': sr.question_asked,
-							'实际在问什么(Underlying Intent)': sr.underlying_intent,
-							'候选人回答要点(Answer Gist)': sr.answer_gist,
-							'为何得此分(Why This Strength)': sr.why_this_strength
+							'面试官问了什么(Question Asked)': sr?.question_asked,
+							'实际在问什么(Underlying Intent)': sr?.underlying_intent,
+							'候选人回答要点(Answer Gist)': sr?.answer_gist,
+							'为何得此分(Why This Strength)': sr?.why_this_strength
 						}
 					};
 				}),
-				'其他证据(Other Evidence)': ((sub.other_evidence as Record<string, unknown>[]) ?? []).map((oe) => ({
+				'其他证据(Other Evidence)': toArray<Record<string, unknown>>(sub.other_evidence).map((oe) => ({
 					quote: oe.quote,
 					context: oe.context ?? '',
 					'为什么不计分(Reason)': oe.reason
 				})),
-				'未映射信号(UNMAPPED)': ((sub.unmapped as Record<string, unknown>[]) ?? []).map((u) => {
+				'未映射信号(UNMAPPED)': toArray<Record<string, unknown>>(sub.unmapped).map((u) => {
 					const sr = u.scoring_rationale as Record<string, unknown>;
 					return {
 						quote: u.quote,
 						'评分依据(Scoring Rationale)': {
-							'面试官问了什么(Question Asked)': sr.question_asked,
-							'实际在问什么(Underlying Intent)': sr.underlying_intent,
-							'候选人回答要点(Answer Gist)': sr.answer_gist,
-							'为何得此分(Why This Strength)': sr.why_this_strength
+							'面试官问了什么(Question Asked)': sr?.question_asked,
+							'实际在问什么(Underlying Intent)': sr?.underlying_intent,
+							'候选人回答要点(Answer Gist)': sr?.answer_gist,
+							'为何得此分(Why This Strength)': sr?.why_this_strength
 						},
 						'强信号描述(Signal)': u.signal,
 						'为什么无法映射(Why)': u.why,
@@ -292,16 +299,17 @@ export function parseDimensionResult(args: Record<string, unknown>): unknown {
 				'子维度分数(Subdimension Score)': sub.subdimension_score,
 				'置信度(Confidence)': sub.confidence,
 				'置信度构成(Confidence Breakdown)': {
-					'问得够不够(elicitation_rate)': cbd.elicitation_rate,
-					'展示得够不够(coverage)': cbd.coverage,
-					'证据产出覆盖(coverage_outcome=D/T)': cbd.coverage_outcome,
-					'答得好不好(avg_strength)': cbd.avg_strength,
-					'问到但未展示(failure_rate)': cbd.failure_rate,
-					'矛盾惩罚(contradiction_penalty)': cbd.contradiction_penalty,
-					'小样本上限(cap_by_E)': cbd.cap_by_e
+					'问得够不够(elicitation_rate)': cbd?.elicitation_rate,
+					'展示得够不够(coverage)': cbd?.coverage,
+					'证据产出覆盖(coverage_outcome=D/T)': cbd?.coverage_outcome,
+					'答得好不好(avg_strength)': cbd?.avg_strength,
+					'问到但未展示(failure_rate)': cbd?.failure_rate,
+					'矛盾惩罚(contradiction_penalty)': cbd?.contradiction_penalty,
+					'小样本上限(cap_by_E)': cbd?.cap_by_e
 				},
-				'追问问题(Follow-up Questions)': sub.follow_up_questions ?? []
+				'追问问题(Follow-up Questions)': toArray(sub.follow_up_questions)
 			};
 		})
 	};
 }
+
