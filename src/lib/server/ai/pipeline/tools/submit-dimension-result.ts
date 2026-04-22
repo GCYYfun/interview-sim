@@ -222,14 +222,22 @@ export function createSubmitDimensionResultTool(dimension: DimensionKey) {
 
 /** 将工具参数重组为 rubric-rater.md 输出 Schema 格式 */
 export function parseDimensionResult(args: Record<string, unknown>): unknown {
-	const overall = args.overall as Record<string, unknown>;
-
 	// LLM 偶尔会违反 schema，把 array 字段返回成 object（{}）。
 	// ?? [] 只对 null/undefined 生效，必须用 Array.isArray() 兜底。
 	function toArray<T>(v: unknown): T[] {
 		return Array.isArray(v) ? (v as T[]) : [];
 	}
+	// LLM 有时用中文 key 或漏填 required 对象字段 → 用 ?? {} 兜底，避免直接 crash
+	function toObj(v: unknown): Record<string, unknown> {
+		return (v && typeof v === 'object' && !Array.isArray(v))
+			? (v as Record<string, unknown>)
+			: {};
+	}
 
+	// 打印顶层 key 名，帮助定位 LLM 是否用了错误的 key（如中文 key）
+	console.warn('[parseDimensionResult] args top-level keys:', Object.keys(args));
+
+	const overall = toObj(args.overall);
 	const subdimensions = toArray<Record<string, unknown>>(args.subdimensions);
 
 	return {
@@ -241,8 +249,8 @@ export function parseDimensionResult(args: Record<string, unknown>): unknown {
 			'置信度(Confidence)': overall.confidence
 		},
 		'子维度列表(Subdimensions)': subdimensions.map((sub) => {
-			const count = sub.count as Record<string, unknown>;
-			const cbd = sub.confidence_breakdown as Record<string, unknown>;
+			const count = toObj(sub.count);
+			const cbd = toObj(sub.confidence_breakdown);
 			return {
 				'名称(Name)': sub.name,
 				'是否被问到(Elicited)': sub.elicited,
@@ -252,9 +260,9 @@ export function parseDimensionResult(args: Record<string, unknown>): unknown {
 					'被展示数(Demonstrated Count, D)': count?.demonstrated_count
 				},
 				'证据点列表(Evidence Points)': toArray<Record<string, unknown>>(sub.evidence_points).map((ep) => {
-					const pq = ep.primary_quote as Record<string, unknown>;
-					const sq = ep.secondary_quote as Record<string, unknown> | undefined;
-					const sr = ep.scoring_rationale as Record<string, unknown>;
+					const pq = toObj(ep.primary_quote);
+					const sq = ep.secondary_quote ? toObj(ep.secondary_quote) : undefined;
+					const sr = toObj(ep.scoring_rationale);
 					return {
 						'证据点ID(Evidence ID)': ep.evidence_id,
 						'类型(Type)': ep.type,
