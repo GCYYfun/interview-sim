@@ -10,7 +10,7 @@ import {
 import { runStage1a } from './stages/stage1-job-fit';
 import { runStage1Rubric } from './stages/stage1-rubric';
 import { runStage2 } from './stages/stage2-merger';
-import { appendFileSync } from 'node:fs';
+import { logger } from '$lib/server/logger';
 
 type NotebookDetail = NonNullable<
 	Awaited<ReturnType<typeof import('$lib/server/workbench').getNotebookDetailForUser>>
@@ -55,7 +55,7 @@ async function runStageWithRetry(
 			return { checkpoint: current, data };
 		} catch (err) {
 			const error = err instanceof Error ? err.message : String(err);
-			console.error(`[Pipeline] ${stageId} attempt ${attempt} failed:`, error);
+			logger.error('pipeline', `${stageId} attempt ${attempt} failed`, { stageId, attempt, error }, 'pipeline');
 			push({ type: 'stage_retry', stage: stageId, message: `${stageId} 失败：${error.slice(0, 120)}`, attempt });
 			current = await updateStageCheckpoint(rowId, current, stageId, { status: 'failed', error });
 			onCheckpointUpdate(current);
@@ -83,6 +83,13 @@ export async function* runInterviewPipeline(
 	// ─── Checkpoint 初始化 ────────────────────────────────────────────────────
 	const { rowId, checkpoint: initCheckpoint, isResume } = await getOrCreateCheckpoint(notebookId, resume);
 	let checkpoint = initCheckpoint;
+
+	logger.info('pipeline', `pipeline ${isResume ? 'resumed' : 'started'}`, {
+		notebookId,
+		rowId,
+		mode,
+		candidate: detail.record.subject
+	}, 'pipeline');
 
 	let latestCheckpoint = checkpoint;
 	const getLatestCheckpoint = () => latestCheckpoint;
@@ -223,23 +230,19 @@ export async function* runInterviewPipeline(
 		}
 
 		// 记录报告生成统计信息
-		try {
-			const logEntry = {
-				timestamp: new Date().toISOString(),
-				userId: _user.id,
-				userName: _user.name || _user.email,
-				candidateName: detail.record.subject,
-				notebookId: notebookId,
-				notebookTitle: detail.record.title
-			};
-			appendFileSync('.svelte-kit/report_generation_stats.jsonl', JSON.stringify(logEntry) + '\n', 'utf-8');
-		} catch (e) {
-			console.error('写入统计日志失败:', e);
-		}
+		logger.info('pipeline', 'report generated', {
+			userId: _user.id,
+			userName: _user.name || _user.email,
+			candidateName: detail.record.subject,
+			notebookId,
+			notebookTitle: detail.record.title,
+			rowId
+		}, 'pipeline');
 
 		await finalizeCheckpoint(rowId, checkpoint, "done");
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
+		logger.error('pipeline', 'pipeline failed', { notebookId, rowId, error: message }, 'pipeline');
 		// 失败时保持 DB 中 status=running，下次触发时 sanitizeForResume 会清理卡住的 stage，实现断点续跑
 		// 只有全部成功才 finalize 为 done
 		yield { type: 'error', message: `发生严重异常，请立即联系负责人，防止服务崩溃！详细信息：${message}` };

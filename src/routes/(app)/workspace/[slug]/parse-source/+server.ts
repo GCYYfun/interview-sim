@@ -6,6 +6,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { PDF } from '@libpdf/core';
 import mammoth from 'mammoth';
+import { logger } from '$lib/server/logger';
 
 // ---------- helpers ----------
 
@@ -197,11 +198,11 @@ function buildSystemPrompt(sourceType: string): string {
 export const POST: RequestHandler = async ({ request, params, locals }) => {
 	console.log('[parse-source] 开始处理请求');
 	const user = locals.user;
-	console.log('[parse-source] user:', user ? `已登录 (${user.email})` : '未登录');
-	console.log('[parse-source] session:', locals.session ? '有 session' : '无 session');
+	logger.info('parse-source', 'request received', { slug: params.slug, userId: user?.id });
+	logger.debug('parse-source', 'session check', { hasUser: !!user, hasSession: !!locals.session });
 
 	if (!user) {
-		console.error('[parse-source] 401 错误: 用户未认证');
+		logger.warn('parse-source', '401 unauthorized - no user in locals');
 		error(401, 'Unauthorized');
 	}
 
@@ -231,7 +232,7 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 	try {
 		rawPath = await backupRawFile(file, sourceType, notebookSlug, resolvedTitle);
 	} catch (e) {
-		console.error('[parse-source] backup raw failed:', e);
+		logger.warn('parse-source', 'backup raw file failed', e);
 	}
 
 	// ---- 读取文件内容 ----
@@ -293,7 +294,7 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 							encoder.encode(JSON.stringify({ type: 'done', rawPath, mdPath }) + '\n')
 						);
 					} catch (e) {
-						console.error('[parse-source] backup md failed:', e);
+						logger.warn('parse-source', 'backup md file failed (libpdf path)', e);
 						controller.enqueue(
 							encoder.encode(JSON.stringify({ type: 'done', rawPath }) + '\n')
 						);
@@ -338,6 +339,7 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 					}
 				} catch (e) {
 					const msg = e instanceof Error ? e.message : 'LLM 解析失败';
+					logger.error('parse-source', 'LLM stream failed', e);
 					controller.enqueue(
 						encoder.encode(JSON.stringify({ type: 'error', message: msg }) + '\n')
 					);
@@ -351,7 +353,7 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 						encoder.encode(JSON.stringify({ type: 'done', rawPath, mdPath }) + '\n')
 					);
 				} catch (e) {
-					console.error('[parse-source] backup md failed:', e);
+					logger.warn('parse-source', 'backup md file failed (LLM path)', e);
 					controller.enqueue(encoder.encode(JSON.stringify({ type: 'done', rawPath }) + '\n'));
 				}
 
