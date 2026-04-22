@@ -73,13 +73,16 @@ export function createSubmitJobFitResultTool() {
 
 /** 将工具参数重组为 job-fit-rater.md 输出 Schema 格式 */
 export function parseJobFitResult(args: Record<string, unknown>): unknown {
+	function toArray<T>(v: unknown): T[] {
+		return Array.isArray(v) ? (v as T[]) : [];
+	}
 	return {
 		'岗位匹配简述(Job Fit Summary)': {
 			'匹配结论(Fit Verdict)': args.fit_verdict,
 			'简述(Fit Summary)': args.fit_summary,
-			'匹配亮点(Strengths)': args.strengths,
-			'风险点(Risks)': args.risks,
-			'证据(Evidence)': args.evidence,
+			'匹配亮点(Strengths)': toArray(args.strengths),
+			'风险点(Risks)': toArray(args.risks),
+			'证据(Evidence)': toArray(args.evidence),
 			'置信度(Confidence)': args.confidence
 		}
 	};

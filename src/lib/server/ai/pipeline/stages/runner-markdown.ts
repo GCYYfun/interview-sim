@@ -1,59 +1,10 @@
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { Model, Context, MengLongProvider, ProviderRegistry, ConsoleLogger } from '$menglong';
-import { env } from '$env/dynamic/private';
-import type { Config } from '$menglong';
+import { Context } from '$menglong';
 import type { PipelineEvent } from '../types';
 import { debugLog, log } from '../debug-log';
+import { createPipelineModel, loadPrompt, fillPlaceholders } from './runner-shared';
 
-// pipeline 额外支持 infinigence 前缀，均走 menglong 网关
-if (!ProviderRegistry.getProviderClass('infinigence')) {
-	log('[runner-markdown] 注册 infinigence provider');
-	ProviderRegistry.register('infinigence', MengLongProvider);
-} else {
-	log('[runner-markdown] infinigence provider 已注册');
-}
+export { loadPrompt, fillPlaceholders };
 
-export function createPipelineModel() {
-	const modelId = env.PIPELINE_LLM_MODEL?.trim() || env.HUSHI_LLM_MODEL?.trim() || 'infinigence/deepseek-v3.2-thinking';
-	const apiKey = env.MENGLONG_API_KEY?.trim() || undefined;
-	const baseUrl = env.MENGLONG_BASE_URL?.trim() || 'http://localhost:8000/menglong';
-	const config: Config = {
-		default: { model_id: modelId },
-		providers: {
-			menglong:    { base_url: baseUrl, api_key: apiKey, timeout: 600 },
-			anthropic:   { base_url: baseUrl, api_key: apiKey, timeout: 600 },
-			infinigence: { base_url: baseUrl, api_key: apiKey, timeout: 600 }
-		}
-	};
-	debugLog('createPipelineModel', { modelId, baseUrl });
-	// 只有 HUSHI_LLM_DEBUG=true 时才启用 SDK 日志
-	const isDebug = process.env.HUSHI_LLM_DEBUG === 'true';
-	const logger = isDebug ? new ConsoleLogger() : undefined;
-	return new Model(modelId, {
-		config,
-		logger
-	});
-}
-
-const PROMPT_DIR = resolve('prompt');
-const promptCache = new Map<string, string>();
-
-export async function loadPrompt(filename: string): Promise<string> {
-	if (!promptCache.has(filename)) {
-		const content = await readFile(resolve(PROMPT_DIR, filename), 'utf-8');
-		promptCache.set(filename, content);
-	}
-	return promptCache.get(filename)!;
-}
-
-/** 替换 prompt 中的 {{PIPELINE_XXX}} 占位符 */
-export function fillPlaceholders(template: string, vars: Record<string, string>): string {
-	return Object.entries(vars).reduce(
-		(text, [key, value]) => text.replaceAll(`{{${key}}}`, value),
-		template
-	);
-}
 
 /**
  * Markdown输出模式 stage runner：单轮流式调用，直接输出Markdown文本，不要求工具调用。
@@ -136,8 +87,9 @@ export async function* runStageMarkdown(
 			}
 		}
 	} catch (error) {
+		const msg = error instanceof Error ? error.message : JSON.stringify(error);
 		console.error(`[${stageId}] streamChat 错误:`, error);
-		throw error;
+		throw new Error(`[${stageId}] streamChat 失败: ${msg}`);
 	}
 
 	log(`[${stageId}] 流式调用结束，统计:`, {

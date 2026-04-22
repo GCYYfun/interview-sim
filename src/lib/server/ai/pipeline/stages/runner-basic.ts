@@ -1,60 +1,20 @@
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { Model, Context, MengLongProvider, ProviderRegistry, ConsoleLogger } from '$menglong';
-import { env } from '$env/dynamic/private';
-import type { Config } from '$menglong';
+import { Context } from '$menglong';
 import type { ExecutableTool } from '$lib/server/ai/generator/types';
 import type { PipelineEvent, DimensionKey } from '../types';
 import { createSubmitEvaluationResultTool, parseSubmittedResult } from '../tools/submit-evaluation-result';
 import { debugLog, log } from '../debug-log';
-import { debugStageLog, debugToolCall, debugStreamChunk, debugPipelineEvent } from '../debug-log-enhanced';
+import { debugStageLog, debugStreamChunk } from '../debug-log-enhanced';
+import { createPipelineModel, loadPrompt, fillPlaceholders } from './runner-shared';
 
-// pipeline 额外支持 infinigence 前缀，均走 menglong 网关
-if (!ProviderRegistry.getProviderClass('infinigence')) {
-	log('[runner-basic] 注册 infinigence provider');
-	ProviderRegistry.register('infinigence', MengLongProvider);
-} else {
-	log('[runner-basic] infinigence provider 已注册');
-}
+export { loadPrompt, fillPlaceholders };
 
-export function createPipelineModel() {
-	const modelId = env.PIPELINE_LLM_MODEL?.trim() || env.HUSHI_LLM_MODEL?.trim() || 'infinigence/deepseek-v3.2-thinking';
-	const apiKey = env.MENGLONG_API_KEY?.trim() || undefined;
-	const baseUrl = env.MENGLONG_BASE_URL?.trim() || 'http://localhost:8000/menglong';
-	const config: Config = {
-		default: { model_id: modelId },
-		providers: {
-			menglong:    { base_url: baseUrl, api_key: apiKey, timeout: 600 },
-			anthropic:   { base_url: baseUrl, api_key: apiKey, timeout: 600 },
-			infinigence: { base_url: baseUrl, api_key: apiKey, timeout: 600 }
-		}
-	};
-	debugLog('createPipelineModel', { modelId, baseUrl });
-	// 只有 HUSHI_LLM_DEBUG=true 时才启用 SDK 日志
-	const isDebug = process.env.HUSHI_LLM_DEBUG === 'true';
-	const logger = isDebug ? new ConsoleLogger() : undefined;
-	return new Model(modelId, {
-		config,
-		logger
-	});
-}
 
-const PROMPT_DIR = resolve('prompt');
-const promptCache = new Map<string, string>();
-
-export async function loadPrompt(filename: string): Promise<string> {
-	if (!promptCache.has(filename)) {
-		const content = await readFile(resolve(PROMPT_DIR, filename), 'utf-8');
-		promptCache.set(filename, content);
-	}
-	return promptCache.get(filename)!;
-}
-
-/** 从 dimension-rubric.md 中按 ## 标题提取指定维度章节 */
 export function extractDimensionSection(rubric: string, dimension: DimensionKey): string {
 	const lines = rubric.split('\n');
 	const startIdx = lines.findIndex((l) => l.startsWith(`## ${dimension}`));
-	if (startIdx === -1) return `[未找到维度章节: ${dimension}]`;
+	if (startIdx === -1) {
+		throw new Error(`dimension-rubric.md 中未找到维度章节 "## ${dimension}"，请检查 prompt 文件`);
+	}
 	let endIdx = lines.length;
 	for (let i = startIdx + 1; i < lines.length; i++) {
 		if (lines[i].startsWith('## ')) { endIdx = i; break; }
@@ -62,13 +22,7 @@ export function extractDimensionSection(rubric: string, dimension: DimensionKey)
 	return lines.slice(startIdx, endIdx).join('\n').trim();
 }
 
-/** 替换 prompt 中的 {{PIPELINE_XXX}} 占位符 */
-export function fillPlaceholders(template: string, vars: Record<string, string>): string {
-	return Object.entries(vars).reduce(
-		(text, [key, value]) => text.replaceAll(`{{${key}}}`, value),
-		template
-	);
-}
+
 
 /**
  * 基础模式 stage runner：单轮流式调用，支持 thinking + tool call。
@@ -190,19 +144,22 @@ export async function* runStageBasic(
 					if (typeof action.arguments === 'string') {
 						accumulatedTools[idx].arguments += action.arguments;
 						// 发送工具调用参数增量到 UI
+						// - name：用已积累的名字，后续 chunk 的 action.name 为空
+						// - args：传累积后的完整字符串，前端直接替换展示，实现流式增长效果
+						const accumulated = accumulatedTools[idx].arguments;
 						yield {
 							type: 'tool' as const,
-							name: action.name || 'unknown',
-							message: `接收参数: ${action.arguments.slice(0, 50)}${action.arguments.length > 50 ? '...' : ''}`,
+							name: accumulatedTools[idx].name || action.name || toolName,
+							message: `参数（${accumulated.length} 字符）`,
 							stage: stageId,
-							args: action.arguments
+							args: accumulated
 						};
 					} else {
 						// 如果 arguments 已经是对象，转换为字符串
 						accumulatedTools[idx].arguments = JSON.stringify(action.arguments);
 						yield {
 							type: 'tool' as const,
-							name: action.name || 'unknown',
+							name: accumulatedTools[idx].name || action.name || toolName,
 							message: `接收参数对象`,
 							stage: stageId,
 							args: action.arguments
@@ -241,8 +198,9 @@ export async function* runStageBasic(
 		}
 	}
 	} catch (error) {
+		const msg = error instanceof Error ? error.message : JSON.stringify(error);
 		console.error(`[${stageId}] streamChat 错误:`, error);
-		throw error;
+		throw new Error(`[${stageId}] streamChat 失败: ${msg}`);
 	}
 
 	log(`[${stageId}] 流式调用结束，统计:`, {

@@ -24,14 +24,22 @@ export async function* runStage2(
 			stage1f: cp.stages.stage1f.data ? '有数据' : '无数据'
 		});
 
+		// 上游数据完整性检查：任一 stage1 数据缺失则中止，避免生成残缺报告
+		const missingStages = (
+			['stage1a', 'stage1b', 'stage1c', 'stage1d', 'stage1e', 'stage1f'] as const
+		).filter((s) => !cp.stages[s].data);
+		if (missingStages.length > 0) {
+			throw new Error(`stage2 启动前检测到上游数据缺失: ${missingStages.join(', ')}，请先确保 stage1 全部成功`);
+		}
+
 		// 使用新的Markdown输出模式，直接生成Markdown报告
 		return yield* runStageMarkdown('final-merger-markdown.md', {
-			PIPELINE_STAGE1A_RESULT: JSON.stringify(cp.stages.stage1a.data ?? {}, null, 2),
-			PIPELINE_STAGE1B_RESULT: JSON.stringify(cp.stages.stage1b.data ?? {}, null, 2),
-			PIPELINE_STAGE1C_RESULT: JSON.stringify(cp.stages.stage1c.data ?? {}, null, 2),
-			PIPELINE_STAGE1D_RESULT: JSON.stringify(cp.stages.stage1d.data ?? {}, null, 2),
-			PIPELINE_STAGE1E_RESULT: JSON.stringify(cp.stages.stage1e.data ?? {}, null, 2),
-			PIPELINE_STAGE1F_RESULT: JSON.stringify(cp.stages.stage1f.data ?? {}, null, 2)
+			PIPELINE_STAGE1A_RESULT: JSON.stringify(cp.stages.stage1a.data, null, 2),
+			PIPELINE_STAGE1B_RESULT: JSON.stringify(cp.stages.stage1b.data, null, 2),
+			PIPELINE_STAGE1C_RESULT: JSON.stringify(cp.stages.stage1c.data, null, 2),
+			PIPELINE_STAGE1D_RESULT: JSON.stringify(cp.stages.stage1d.data, null, 2),
+			PIPELINE_STAGE1E_RESULT: JSON.stringify(cp.stages.stage1e.data, null, 2),
+			PIPELINE_STAGE1F_RESULT: JSON.stringify(cp.stages.stage1f.data, null, 2)
 		}, 'pipeline/basic', 'stage2');
 	}
 
