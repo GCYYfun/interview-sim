@@ -1,15 +1,23 @@
 [project]
 name = "interview-sim"
 version = "0.1.0"
-description = "Add your description here"
+description = "面试模拟系统 - 基于 AI 的智能面试助手"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "httpx[socks]>=0.28.1",
     "menglong",
-    "pdfplumber>=0.11.8",
-    "reportlab>=4.4.6",
+    "numpy>=2.3.2",
+    "pandas>=2.3.2",
+    "plotly>=6.5.0",
+    "seaborn>=0.13.2",
+    "streamlit>=1.52.1",
 ]
 
 [tool.uv.sources]
-menglong = { git = "https://github.com/gcyyfun/menglong.git" }
+menglong = { git = "https://github.com/GCYYfun/MengLong" }
+
+
+[[tool.uv.index]]
+url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/"
+default = true

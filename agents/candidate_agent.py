@@ -1,79 +1,124 @@
-from typing import List, Dict, Any, Optional
-from .base_agent import BaseAgent
-
-class CandidateAgent(BaseAgent):
-    """
-    候选人 Agent，负责回答面试官的问题。
-    支持两种模式：
-    1. 无 Transcript 模式：根据简历自然回答
-    2. 有 Transcript 模式：参考 Transcript 优化回答
-    """
-    
-    def __init__(self, model: str = "anthropic/global.anthropic.claude-sonnet-4-5-20250929-v1:0"):
-        super().__init__(name="Candidate", role="candidate", model=model)
-    
-    def _build_system_prompt(self, resume: str, jd: str = "", transcript: Optional[str] = None) -> str:
-        """构建系统提示词"""
-        
-        base_prompt = f"""你是一位正在参加面试的候选人。你的背景和经历如下：
-
-## 你的简历
-{resume}
-
-## 你正在应聘的岗位
-{jd if jd else "未提供岗位信息"}
-
-## 回答要求
-1. **真实自然**：基于你的简历内容回答，不要编造不存在的经历
-2. **展示能力**：在回答中体现你的专业能力和经验
-3. **具体详实**：用具体的例子和数据来支撑你的回答
-4. **保持谦逊**：既要自信展示能力，也要表现出学习和成长的意愿
-5. **适当发挥**：在简历基础上，可以合理补充细节，使回答更加完整
-
-## 输出格式
-直接回答问题即可，像真实面试一样自然地表达。
 """
-        
-        if transcript:
-            transcript_prompt = f"""
-## 参考面试记录（Transcript）
-以下是一份参考面试记录，你可以借鉴其中的回答思路和表达方式：
+候选人Agent - 基于简历自动对话，用于数据增强/蒸馏
 
-{transcript}
-
-注意：
-- 参考 Transcript 中的优秀表达和回答结构
-- 但要根据你自己的简历内容来回答
-- 保持回答的一致性和真实性
+功能：
+- 根据候选人简历信息，自动与HR Agent对话
+- 模拟真实候选人的回答风格和内容
+- 用于生成训练数据（数据增强）
+- 支持模型蒸馏场景
 """
-            return base_prompt + transcript_prompt
-        
-        return base_prompt
 
-    def generate_answer(self, context: Dict[str, Any], history: List[Dict[str, str]]) -> str:
+from menglong import Model
+from menglong.ml_model.schema.ml_request import UserMessage as user
+
+
+class CandidateAgent:
+    """基于真实简历数据的候选人Agent"""
+
+    def __init__(self, candidate_data: dict):
         """
-        生成对面试官问题的回答。
-        
+        初始化候选人Agent
+
         Args:
-            context: 包含 'resume', 可选 'jd', 'transcript'
-            history: 对话历史，格式为 [{"role": "interviewer/candidate", "content": "..."}]
-        
-        Returns:
-            候选人的回答
+            candidate_data: 包含简历、JD、岗位信息等的字典
+                {
+                    "resume": str,           # 候选人简历
+                    "jd": str,              # 岗位描述
+                    "position": str,        # 岗位名称
+                    "intelligence_requirement": int,  # 聪明度要求(0-100)
+                }
         """
-        resume = context.get('resume', '未提供简历')
-        jd = context.get('jd', '')
-        transcript = context.get('transcript', None)
-        
-        system_prompt = self._build_system_prompt(resume, jd, transcript)
-        
-        # 转换历史记录格式：candidate -> assistant, interviewer -> user
-        mapped_messages = []
-        for msg in history:
-            role = "assistant" if msg["role"] == "candidate" else "user"
-            mapped_messages.append({"role": role, "content": msg["content"]})
-            
-        return self.generate_response(mapped_messages, system_prompt=system_prompt)
+        self.candidate_data = candidate_data
+        self.resume = candidate_data.get("resume", "")
+        self.jd = candidate_data.get("jd", "")
+        self.position = candidate_data.get("position", "")
+        self.intelligence_requirement = candidate_data.get(
+            "intelligence_requirement", 0
+        )
+        self.model = Model()
 
-    def run(self, context: Dict[str, Any], history: List[Dict[str, str]]) -> str:
-        return self.generate_answer(context, history)
+        # 构建候选人人设提示
+        self.persona_prompt = self._build_persona_prompt()
+
+    def _build_persona_prompt(self):
+        """构建候选人人设提示"""
+        return f"""
+你是一位求职者，正在参加{self.position}岗位的面试。
+
+你的简历背景：
+{self.resume}
+
+应聘的岗位要求：
+{self.jd}
+
+岗位对聪明度的要求：{self.intelligence_requirement}/100
+
+请根据你的简历背景，以第一人称回答面试官的问题。要求：
+1. 回答要符合简历中的经历和背景
+2. 体现出适合该岗位的能力和特质
+3. 回答要真实可信，不要夸大
+4. 语气要自然、诚恳，体现求职者的谨慎和积极
+5. 如果问题涉及简历中没有的经历，要诚实说明并展示学习意愿
+6. 回答长度适中，既要详细又不要过于冗长
+
+现在请准备回答面试官的问题。
+"""
+
+    def answer_question(self, question: str) -> str:
+        """
+        根据简历背景回答面试问题
+
+        Args:
+            question: 面试官的问题
+
+        Returns:
+            str: 候选人的回答
+        """
+        try:
+            # 构建完整的对话提示
+            full_prompt = f"""
+{self.persona_prompt}
+
+面试官问：{question}
+
+请以候选人身份回答这个问题：
+"""
+
+            response = self.model.chat([user(content=full_prompt)])
+            answer = response.text
+
+            # 清理格式，确保回答自然
+            answer = self._clean_answer(answer)
+
+            return answer
+
+        except Exception as e:
+            return f"抱歉，我需要一点时间思考这个问题。能否请您再详细说明一下？(Error: {str(e)})"
+
+    def _clean_answer(self, answer: str) -> str:
+        """清理回答格式，移除可能的角色标识和多余符号"""
+        # 移除可能的角色标识
+        role_prefixes = ["候选人：", "求职者：", "我：", "候选人:", "求职者:", "我:"]
+        for prefix in role_prefixes:
+            if answer.startswith(prefix):
+                answer = answer.split("：", 1)[-1].split(":", 1)[-1].strip()
+                break
+
+        # 移除多余的引号
+        answer = answer.strip("\"'")
+
+        return answer.strip()
+
+    def get_candidate_info_summary(self) -> dict:
+        """获取候选人信息摘要"""
+        return {
+            "position": self.position,
+            "intelligence_requirement": self.intelligence_requirement,
+            "resume_preview": (
+                self.resume[:200] + "..." if len(self.resume) > 200 else self.resume
+            ),
+            "jd_preview": self.jd[:200] + "..." if len(self.jd) > 200 else self.jd,
+        }
+
+    def __repr__(self):
+        return f"CandidateAgent(position='{self.position}', intelligence_req={self.intelligence_requirement})"

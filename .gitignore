@@ -14,3 +14,13 @@ wheels/
 *.DS_Store
 data
 *.sh
+test/
+temp/
+pages/
+md_eval/
+data/
+uv.lock
+analysis/
+interview_data.csv
+checkpoints/
+reports/
